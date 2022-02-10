@@ -16,11 +16,27 @@
 
 package io.rsocket.transport.local;
 
+import io.netty.buffer.ByteBufUtil;
+import io.netty.buffer.Unpooled;
+import io.rsocket.frame.FrameHeaderCodec;
+import io.rsocket.frame.FrameType;
 import io.rsocket.test.TransportTest;
 import java.time.Duration;
 import java.util.UUID;
 
 final class LocalResumableTransportTest implements TransportTest {
+
+  public static void main(String[] args) {
+
+    System.out.println(
+        FrameHeaderCodec.frameType(
+            Unpooled.copiedBuffer(
+                ByteBufUtil.decodeHexDump("000000003800000000000007ef4a"))));
+    System.out.println(
+        FrameHeaderCodec.frameType(
+            Unpooled.copiedBuffer(
+                ByteBufUtil.decodeHexDump("000000002c0000000004"))));
+  }
 
   private final TransportPair transportPair =
       new TransportPair<>(

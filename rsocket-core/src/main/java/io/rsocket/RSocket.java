@@ -85,7 +85,11 @@ public interface RSocket extends Availability, Closeable {
   }
 
   @Override
-  default void dispose() {}
+  default void dispose() {
+    dispose(true);
+  }
+
+  default void dispose(boolean force) {}
 
   @Override
   default boolean isDisposed() {

@@ -24,6 +24,8 @@ class RequesterResponderSupport {
   @Nullable final StreamIdSupplier streamIdSupplier;
   final IntObjectMap<FrameHandler> activeStreams;
 
+  boolean terminating;
+
   public RequesterResponderSupport(
       int mtu,
       int maxFrameLength,
@@ -88,6 +90,7 @@ class RequesterResponderSupport {
     final StreamIdSupplier streamIdSupplier = this.streamIdSupplier;
     if (streamIdSupplier != null) {
       synchronized (this) {
+        if
         return streamIdSupplier.nextStreamId(this.activeStreams);
       }
     } else {
@@ -119,6 +122,9 @@ class RequesterResponderSupport {
   }
 
   public synchronized boolean add(int streamId, FrameHandler frameHandler) {
+    if (this.terminating) {
+      throw
+    }
     final IntObjectMap<FrameHandler> activeStreams = this.activeStreams;
     // copy of Map.putIfAbsent(key, value) without `streamId` boxing
     final FrameHandler previousHandler = activeStreams.get(streamId);
@@ -157,5 +163,9 @@ class RequesterResponderSupport {
     }
     activeStreams.remove(streamId);
     return true;
+  }
+
+  public synchronized void terminate() {
+    this.terminating = true;
   }
 }
