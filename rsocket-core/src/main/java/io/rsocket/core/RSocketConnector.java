@@ -45,6 +45,8 @@ import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+
+import org.reactivestreams.Publisher;
 import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
 import reactor.util.annotation.Nullable;
@@ -175,6 +177,11 @@ public class RSocketConnector {
   public RSocketConnector dataMimeType(String dataMimeType) {
     this.dataMimeType = Objects.requireNonNull(dataMimeType);
     return this;
+  }
+
+
+  public RSocketConnector gracefullShutdownTimeout(Supplier<? extends Publisher<?>> decider) {
+    decider.get().subscribe(() -> );
   }
 
   /**
