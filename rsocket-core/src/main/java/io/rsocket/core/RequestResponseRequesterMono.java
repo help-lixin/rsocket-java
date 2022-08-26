@@ -27,6 +27,7 @@ import io.netty.buffer.CompositeByteBuf;
 import io.netty.util.IllegalReferenceCountException;
 import io.rsocket.DuplexConnection;
 import io.rsocket.Payload;
+import io.rsocket.exceptions.CanceledException;
 import io.rsocket.frame.CancelFrameCodec;
 import io.rsocket.frame.FrameType;
 import io.rsocket.frame.decoder.PayloadDecoder;
@@ -34,6 +35,8 @@ import io.rsocket.plugins.RequestInterceptor;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import org.reactivestreams.Subscription;
 import reactor.core.CoreSubscriber;
+import reactor.core.Disposable;
+import reactor.core.Disposables;
 import reactor.core.Exceptions;
 import reactor.core.Scannable;
 import reactor.core.publisher.Mono;
@@ -42,7 +45,7 @@ import reactor.util.annotation.NonNull;
 import reactor.util.annotation.Nullable;
 
 final class RequestResponseRequesterMono extends Mono<Payload>
-    implements RequesterFrameHandler, LeasePermitHandler, Subscription, Scannable {
+    implements RequesterFrameHandler, LeasePermitHandler, Subscription, Scannable, Disposable {
 
   final ByteBufAllocator allocator;
   final Payload payload;
@@ -253,6 +256,32 @@ final class RequestResponseRequesterMono extends Mono<Payload>
     } else if (!isReadyToSendFirstFrame(previousState)) {
       this.payload.release();
     }
+  }
+
+  @Override
+  public void dispose() {
+    long previousState = markTerminated(STATE, this);
+    if (isTerminated(previousState)) {
+      return;
+    }
+
+    if (isFirstFrameSent(previousState)) {
+      final int streamId = this.streamId;
+      this.requesterResponderSupport.remove(streamId, this);
+
+      ReassemblyUtils.synchronizedRelease(this, previousState);
+
+      this.connection.sendFrame(streamId, CancelFrameCodec.encode(this.allocator, streamId));
+
+      final RequestInterceptor requestInterceptor = this.requestInterceptor;
+      if (requestInterceptor != null) {
+        requestInterceptor.onCancel(streamId, FrameType.REQUEST_RESPONSE);
+      }
+    } else if (!isReadyToSendFirstFrame(previousState)) {
+      this.payload.release();
+    }
+
+    this.actual.onError(new CanceledException("Forcefully disposed"));
   }
 
   @Override

@@ -9,6 +9,9 @@ import io.rsocket.frame.decoder.PayloadDecoder;
 import io.rsocket.plugins.RequestInterceptor;
 import java.util.Objects;
 import java.util.function.Function;
+
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 import reactor.util.annotation.Nullable;
 
 class RequesterResponderSupport {
@@ -19,12 +22,14 @@ class RequesterResponderSupport {
   private final PayloadDecoder payloadDecoder;
   private final ByteBufAllocator allocator;
   private final DuplexConnection connection;
+  private final Sinks.Empty<Void> onAllStreamsTerminatedSink;
   @Nullable private final RequestInterceptor requestInterceptor;
 
   @Nullable final StreamIdSupplier streamIdSupplier;
   final IntObjectMap<FrameHandler> activeStreams;
 
   boolean terminating;
+  boolean terminated;
 
   public RequesterResponderSupport(
       int mtu,
@@ -43,6 +48,7 @@ class RequesterResponderSupport {
     this.allocator = connection.alloc();
     this.streamIdSupplier = streamIdSupplier;
     this.connection = connection;
+    this.onAllStreamsTerminatedSink = Sinks.empty();
     this.requestInterceptor = requestInterceptorFunction.apply((RSocket) this);
   }
 
@@ -122,8 +128,8 @@ class RequesterResponderSupport {
   }
 
   public synchronized boolean add(int streamId, FrameHandler frameHandler) {
-    if (this.terminating) {
-      throw
+    if (this.terminated) {
+         throwing
     }
     final IntObjectMap<FrameHandler> activeStreams = this.activeStreams;
     // copy of Map.putIfAbsent(key, value) without `streamId` boxing
@@ -165,7 +171,27 @@ class RequesterResponderSupport {
     return true;
   }
 
-  public synchronized void terminate() {
-    this.terminating = true;
+  public void terminate() {
+    final boolean terminated;
+    synchronized (this) {
+      this.terminating = true;
+
+      if (activeStreams.size() == 0) {
+        terminated = true;
+        this.terminated = true;
+      } else {
+        terminated = false;
+      }
+    }
+
+    if (terminated) {
+      onAllStreamsTerminatedSink.tryEmitEmpty();
+    } else {
+      
+    }
+  }
+
+  public Mono<Void> onAllStreamsTerminated() {
+    return onAllStreamsTerminatedSink.asMono();
   }
 }

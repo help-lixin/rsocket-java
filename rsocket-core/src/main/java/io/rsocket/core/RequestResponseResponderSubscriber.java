@@ -38,13 +38,14 @@ import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.CoreSubscriber;
+import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Operators;
 import reactor.util.annotation.Nullable;
 import reactor.util.context.Context;
 
 final class RequestResponseResponderSubscriber
-    implements ResponderFrameHandler, CoreSubscriber<Payload> {
+    implements ResponderFrameHandler, CoreSubscriber<Payload>, Disposable {
 
   static final Logger logger = LoggerFactory.getLogger(RequestResponseResponderSubscriber.class);
 
