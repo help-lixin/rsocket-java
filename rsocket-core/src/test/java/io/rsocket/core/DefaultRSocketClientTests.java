@@ -28,6 +28,7 @@ import io.rsocket.frame.FrameType;
 import io.rsocket.frame.PayloadFrameCodec;
 import io.rsocket.frame.decoder.PayloadDecoder;
 import io.rsocket.internal.subscriber.AssertSubscriber;
+import io.rsocket.test.util.TestDuplexConnection;
 import io.rsocket.util.ByteBufPayload;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -540,20 +541,39 @@ public class DefaultRSocketClientTests {
   @Test
   public void shouldBeRestartedIfSourceWasClosed() {
     AssertSubscriber<RSocket> assertSubscriber = AssertSubscriber.create();
+    AssertSubscriber<Void> terminateSubscriber = AssertSubscriber.create();
+
+    Assertions.assertThat(rule.client.start()).isTrue();
     rule.client.source().subscribe(assertSubscriber);
-    Assertions.assertThat(rule.client.start()).isFalse();
+    rule.client.onClose().subscribe(terminateSubscriber);
+
     rule.delayer.run();
+
     assertSubscriber.assertTerminated().assertValueCount(1);
+
+    rule.socket.dispose();
+
+    terminateSubscriber.assertNotTerminated();
+    Assertions.assertThat(rule.client.isDisposed()).isFalse();
+
+    rule.connection = new TestDuplexConnection(rule.allocator);
+    rule.socket = rule.newRSocket();
+    rule.producer = Sinks.one();
+
+    AssertSubscriber<RSocket> assertSubscriber2 = AssertSubscriber.create();
+
+    Assertions.assertThat(rule.client.start()).isTrue();
+    rule.client.source().subscribe(assertSubscriber2);
+
+    rule.delayer.run();
+
+    assertSubscriber2.assertTerminated().assertValueCount(1);
 
     rule.client.dispose();
 
-    Assertions.assertThat(rule.client.isDisposed()).isTrue();
+    terminateSubscriber.assertTerminated().assertComplete();
 
-    AssertSubscriber<Void> assertSubscriber1 = AssertSubscriber.create();
-
-    rule.client.onClose().subscribe(assertSubscriber1);
-
-    assertSubscriber1.assertTerminated().assertComplete();
+    Assertions.assertThat(rule.client.start()).isFalse();
 
     Assertions.assertThat(rule.socket.isDisposed()).isTrue();
   }
@@ -630,10 +650,12 @@ public class DefaultRSocketClientTests {
       producer = Sinks.one();
       client =
           new DefaultRSocketClient(
-              producer
-                  .asMono()
-                  .doOnCancel(() -> socket.dispose())
-                  .doOnDiscard(Disposable.class, Disposable::dispose));
+              Mono.defer(
+                  () ->
+                      producer
+                          .asMono()
+                          .doOnCancel(() -> socket.dispose())
+                          .doOnDiscard(Disposable.class, Disposable::dispose)));
     }
 
     @Override
