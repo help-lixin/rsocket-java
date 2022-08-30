@@ -23,6 +23,7 @@ import io.rsocket.frame.FrameType;
 import java.util.AbstractMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.reactivestreams.Publisher;
@@ -35,6 +36,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.MonoOperator;
 import reactor.core.publisher.Operators;
+import reactor.core.publisher.Sinks;
 import reactor.util.annotation.Nullable;
 import reactor.util.context.Context;
 
@@ -56,6 +58,15 @@ class DefaultRSocketClient extends ResolvingOperator<RSocket>
         }
       };
 
+  static final BiConsumer<RSocket, Throwable> NOOPS_CONSUMER =
+      (socket, throwable) -> {
+        // noops
+      };
+
+  @SuppressWarnings("unchecked")
+  static final BiConsumer<RSocket, Throwable>[] NOOPS_CONSUMER_ARRAY =
+      new BiConsumer[] {NOOPS_CONSUMER};
+
   static final Object ON_DISCARD_KEY;
 
   static {
@@ -65,6 +76,8 @@ class DefaultRSocketClient extends ResolvingOperator<RSocket>
 
   final Mono<RSocket> source;
 
+  final Sinks.Empty<Void> onDisposeSink;
+
   volatile Subscription s;
 
   static final AtomicReferenceFieldUpdater<DefaultRSocketClient, Subscription> S =
@@ -72,10 +85,41 @@ class DefaultRSocketClient extends ResolvingOperator<RSocket>
 
   DefaultRSocketClient(Mono<RSocket> source) {
     this.source = unwrapReconnectMono(source);
+    this.onDisposeSink = Sinks.empty();
   }
 
   private Mono<RSocket> unwrapReconnectMono(Mono<RSocket> source) {
     return source instanceof ReconnectMono ? ((ReconnectMono<RSocket>) source).getSource() : source;
+  }
+
+  @Override
+  public boolean start() {
+    for (; ; ) {
+      final BiConsumer<RSocket, Throwable>[] a = this.subscribers;
+
+      if (a == TERMINATED) {
+        return false;
+      }
+
+      if (a == READY) {
+        return false;
+      }
+
+      if (a != EMPTY_UNSUBSCRIBED) {
+        // do nothing if already started
+        return false;
+      }
+
+      if (SUBSCRIBERS.compareAndSet(this, a, NOOPS_CONSUMER_ARRAY)) {
+        this.doSubscribe();
+        return true;
+      }
+    }
+  }
+
+  @Override
+  public Mono<Void> onClose() {
+    return this.onDisposeSink.asMono();
   }
 
   @Override
@@ -194,6 +238,12 @@ class DefaultRSocketClient extends ResolvingOperator<RSocket>
   @Override
   protected void doOnDispose() {
     Operators.terminate(S, this);
+    final RSocket value = this.value;
+    if (value != null) {
+      value.onClose().subscribe(null, onDisposeSink::tryEmitError, onDisposeSink::tryEmitEmpty);
+    } else {
+      onDisposeSink.tryEmitEmpty();
+    }
   }
 
   static final class FlatMapMain<R> implements CoreSubscriber<Payload>, Context, Scannable {

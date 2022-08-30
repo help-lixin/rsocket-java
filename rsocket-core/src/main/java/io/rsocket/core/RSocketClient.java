@@ -15,12 +15,13 @@
  */
 package io.rsocket.core;
 
+import io.rsocket.Closeable;
 import io.rsocket.Payload;
 import io.rsocket.RSocket;
 import org.reactivestreams.Publisher;
-import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 /**
  * Contract for performing RSocket requests.
@@ -74,7 +75,15 @@ import reactor.core.publisher.Mono;
  * @since 1.1
  * @see io.rsocket.loadbalance.LoadbalanceRSocketClient
  */
-public interface RSocketClient extends Disposable {
+public interface RSocketClient extends Closeable {
+
+  default boolean start() {
+    return false;
+  }
+
+  default Mono<Void> onClose() {
+    return Mono.error(new NotImplementedException());
+  }
 
   /** Return the underlying source used to obtain a shared {@link RSocket} connection. */
   Mono<RSocket> source();

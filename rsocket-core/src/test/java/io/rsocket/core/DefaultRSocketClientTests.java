@@ -458,6 +458,107 @@ public class DefaultRSocketClientTests {
   }
 
   @Test
+  public void shouldReceiveOnCloseNotificationOnDisposeOriginalSource() {
+    AssertSubscriber<RSocket> assertSubscriber = AssertSubscriber.create();
+    rule.client.source().subscribe(assertSubscriber);
+    rule.delayer.run();
+    assertSubscriber.assertTerminated().assertValueCount(1);
+
+    rule.client.dispose();
+
+    Assertions.assertThat(rule.client.isDisposed()).isTrue();
+
+    AssertSubscriber<Void> assertSubscriber1 = AssertSubscriber.create();
+
+    rule.client.onClose().subscribe(assertSubscriber1);
+
+    assertSubscriber1.assertTerminated().assertComplete();
+
+    Assertions.assertThat(rule.socket.isDisposed()).isTrue();
+  }
+
+  @Test
+  public void shouldResolveOnStartSource() {
+    AssertSubscriber<RSocket> assertSubscriber = AssertSubscriber.create();
+    Assertions.assertThat(rule.client.start()).isTrue();
+    rule.delayer.run();
+    assertSubscriber.assertTerminated().assertValueCount(1);
+
+    rule.client.dispose();
+
+    Assertions.assertThat(rule.client.isDisposed()).isTrue();
+
+    AssertSubscriber<Void> assertSubscriber1 = AssertSubscriber.create();
+
+    rule.client.onClose().subscribe(assertSubscriber1);
+
+    assertSubscriber1.assertTerminated().assertComplete();
+
+    Assertions.assertThat(rule.socket.isDisposed()).isTrue();
+  }
+
+  @Test
+  public void shouldNotStartTwiceSubscriptionToSource() {
+    Assertions.assertThat(rule.client.start()).isTrue();
+    Assertions.assertThat(rule.client.start()).isFalse();
+    rule.delayer.run();
+
+    rule.client.dispose();
+
+    Assertions.assertThat(rule.client.isDisposed()).isTrue();
+
+    AssertSubscriber<Void> assertSubscriber1 = AssertSubscriber.create();
+
+    rule.client.onClose().subscribe(assertSubscriber1);
+
+    assertSubscriber1.assertTerminated().assertComplete();
+
+    Assertions.assertThat(rule.socket.isDisposed()).isTrue();
+  }
+
+  @Test
+  public void shouldNotStartSubscriptionToSourceIfSourceWasSubscribedDifferently() {
+    AssertSubscriber<RSocket> assertSubscriber = AssertSubscriber.create();
+    rule.client.source().subscribe(assertSubscriber);
+    Assertions.assertThat(rule.client.start()).isFalse();
+    rule.delayer.run();
+    assertSubscriber.assertTerminated().assertValueCount(1);
+
+    rule.client.dispose();
+
+    Assertions.assertThat(rule.client.isDisposed()).isTrue();
+
+    AssertSubscriber<Void> assertSubscriber1 = AssertSubscriber.create();
+
+    rule.client.onClose().subscribe(assertSubscriber1);
+
+    assertSubscriber1.assertTerminated().assertComplete();
+
+    Assertions.assertThat(rule.socket.isDisposed()).isTrue();
+  }
+
+  @Test
+  public void shouldBeRestartedIfSourceWasClosed() {
+    AssertSubscriber<RSocket> assertSubscriber = AssertSubscriber.create();
+    rule.client.source().subscribe(assertSubscriber);
+    Assertions.assertThat(rule.client.start()).isFalse();
+    rule.delayer.run();
+    assertSubscriber.assertTerminated().assertValueCount(1);
+
+    rule.client.dispose();
+
+    Assertions.assertThat(rule.client.isDisposed()).isTrue();
+
+    AssertSubscriber<Void> assertSubscriber1 = AssertSubscriber.create();
+
+    rule.client.onClose().subscribe(assertSubscriber1);
+
+    assertSubscriber1.assertTerminated().assertComplete();
+
+    Assertions.assertThat(rule.socket.isDisposed()).isTrue();
+  }
+
+  @Test
   public void shouldDisposeOriginalSourceIfRacing() {
     for (int i = 0; i < RaceTestConstants.REPEATS; i++) {
       ClientSocketRule rule = new ClientSocketRule();
@@ -482,6 +583,37 @@ public class DefaultRSocketClientTests {
           .assertTerminated()
           .assertError(CancellationException.class)
           .assertErrorMessage("Disposed");
+    }
+  }
+
+  @Test
+  public void shouldStartOriginalSourceOnceIfRacing() {
+    for (int i = 0; i < RaceTestConstants.REPEATS; i++) {
+      ClientSocketRule rule = new ClientSocketRule();
+
+      rule.init();
+
+      AssertSubscriber<RSocket> assertSubscriber = AssertSubscriber.create();
+
+      RaceTestUtils.race(
+          () -> rule.client.source().subscribe(assertSubscriber), () -> rule.client.start());
+
+      Assertions.assertThat(rule.producer.currentSubscriberCount()).isOne();
+
+      rule.delayer.run();
+
+      assertSubscriber.assertTerminated();
+
+      rule.client.dispose();
+
+      Assertions.assertThat(rule.client.isDisposed()).isTrue();
+      Assertions.assertThat(rule.socket.isDisposed()).isTrue();
+
+      AssertSubscriber<Void> assertSubscriber1 = AssertSubscriber.create();
+
+      rule.client.onClose().subscribe(assertSubscriber1);
+
+      assertSubscriber1.assertTerminated().assertComplete();
     }
   }
 
