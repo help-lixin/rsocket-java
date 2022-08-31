@@ -481,7 +481,8 @@ public class DefaultRSocketClientTests {
   @Test
   public void shouldResolveOnStartSource() {
     AssertSubscriber<RSocket> assertSubscriber = AssertSubscriber.create();
-    Assertions.assertThat(rule.client.start()).isTrue();
+    Assertions.assertThat(rule.client.connect()).isTrue();
+    rule.client.source().subscribe(assertSubscriber);
     rule.delayer.run();
     assertSubscriber.assertTerminated().assertValueCount(1);
 
@@ -500,8 +501,8 @@ public class DefaultRSocketClientTests {
 
   @Test
   public void shouldNotStartTwiceSubscriptionToSource() {
-    Assertions.assertThat(rule.client.start()).isTrue();
-    Assertions.assertThat(rule.client.start()).isFalse();
+    Assertions.assertThat(rule.client.connect()).isTrue();
+    Assertions.assertThat(rule.client.connect()).isFalse();
     rule.delayer.run();
 
     rule.client.dispose();
@@ -521,7 +522,7 @@ public class DefaultRSocketClientTests {
   public void shouldNotStartSubscriptionToSourceIfSourceWasSubscribedDifferently() {
     AssertSubscriber<RSocket> assertSubscriber = AssertSubscriber.create();
     rule.client.source().subscribe(assertSubscriber);
-    Assertions.assertThat(rule.client.start()).isFalse();
+    Assertions.assertThat(rule.client.connect()).isFalse();
     rule.delayer.run();
     assertSubscriber.assertTerminated().assertValueCount(1);
 
@@ -543,7 +544,7 @@ public class DefaultRSocketClientTests {
     AssertSubscriber<RSocket> assertSubscriber = AssertSubscriber.create();
     AssertSubscriber<Void> terminateSubscriber = AssertSubscriber.create();
 
-    Assertions.assertThat(rule.client.start()).isTrue();
+    Assertions.assertThat(rule.client.connect()).isTrue();
     rule.client.source().subscribe(assertSubscriber);
     rule.client.onClose().subscribe(terminateSubscriber);
 
@@ -562,7 +563,7 @@ public class DefaultRSocketClientTests {
 
     AssertSubscriber<RSocket> assertSubscriber2 = AssertSubscriber.create();
 
-    Assertions.assertThat(rule.client.start()).isTrue();
+    Assertions.assertThat(rule.client.connect()).isTrue();
     rule.client.source().subscribe(assertSubscriber2);
 
     rule.delayer.run();
@@ -573,7 +574,7 @@ public class DefaultRSocketClientTests {
 
     terminateSubscriber.assertTerminated().assertComplete();
 
-    Assertions.assertThat(rule.client.start()).isFalse();
+    Assertions.assertThat(rule.client.connect()).isFalse();
 
     Assertions.assertThat(rule.socket.isDisposed()).isTrue();
   }
@@ -616,7 +617,7 @@ public class DefaultRSocketClientTests {
       AssertSubscriber<RSocket> assertSubscriber = AssertSubscriber.create();
 
       RaceTestUtils.race(
-          () -> rule.client.source().subscribe(assertSubscriber), () -> rule.client.start());
+          () -> rule.client.source().subscribe(assertSubscriber), () -> rule.client.connect());
 
       Assertions.assertThat(rule.producer.currentSubscriberCount()).isOne();
 

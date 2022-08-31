@@ -77,7 +77,7 @@ import sun.reflect.generics.reflectiveObjects.NotImplementedException;
  */
 public interface RSocketClient extends Closeable {
 
-  default boolean start() {
+  default boolean connect() {
     return false;
   }
 

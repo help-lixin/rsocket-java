@@ -23,7 +23,6 @@ import io.rsocket.frame.FrameType;
 import java.util.AbstractMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.reactivestreams.Publisher;
@@ -58,15 +57,6 @@ class DefaultRSocketClient extends ResolvingOperator<RSocket>
         }
       };
 
-  static final BiConsumer<RSocket, Throwable> NOOPS_CONSUMER =
-      (socket, throwable) -> {
-        // noops
-      };
-
-  @SuppressWarnings("unchecked")
-  static final BiConsumer<RSocket, Throwable>[] NOOPS_CONSUMER_ARRAY =
-      new BiConsumer[] {NOOPS_CONSUMER};
-
   static final Object ON_DISCARD_KEY;
 
   static {
@@ -90,31 +80,6 @@ class DefaultRSocketClient extends ResolvingOperator<RSocket>
 
   private Mono<RSocket> unwrapReconnectMono(Mono<RSocket> source) {
     return source instanceof ReconnectMono ? ((ReconnectMono<RSocket>) source).getSource() : source;
-  }
-
-  @Override
-  public boolean start() {
-    for (; ; ) {
-      final BiConsumer<RSocket, Throwable>[] a = this.subscribers;
-
-      if (a == TERMINATED) {
-        return false;
-      }
-
-      if (a == READY) {
-        return false;
-      }
-
-      if (a != EMPTY_UNSUBSCRIBED) {
-        // do nothing if already started
-        return false;
-      }
-
-      if (SUBSCRIBERS.compareAndSet(this, a, NOOPS_CONSUMER_ARRAY)) {
-        this.doSubscribe();
-        return true;
-      }
-    }
   }
 
   @Override
